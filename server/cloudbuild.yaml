@@ -1,28 +1,35 @@
 # Build & deploy the Cloud Voice relay to Cloud Run.
 #   gcloud builds submit --config server/cloudbuild.yaml \
 #     --substitutions=_REGION=asia-northeast1,_SERVICE=cloud-voice
+#
+# NOTE: when run manually (not via a Git trigger) built-in vars like
+# $COMMIT_SHA are empty, which produces an invalid ":<empty>" image tag.
+# We use a _TAG substitution (default "latest") so manual submits work; pass
+# --substitutions=...,_TAG=$(git rev-parse --short HEAD) for immutable tags.
 substitutions:
   _REGION: asia-northeast1
   _SERVICE: cloud-voice
+  _REPO: cloud-voice
+  _TAG: latest
 
 steps:
   - name: gcr.io/cloud-builders/docker
     args:
       - build
       - -t
-      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/cloud-voice/${_SERVICE}:$COMMIT_SHA
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:${_TAG}
       - server
   - name: gcr.io/cloud-builders/docker
     args:
       - push
-      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/cloud-voice/${_SERVICE}:$COMMIT_SHA
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:${_TAG}
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud
     args:
       - run
       - deploy
       - ${_SERVICE}
-      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/cloud-voice/${_SERVICE}:$COMMIT_SHA
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:${_TAG}
       - --region=${_REGION}
       - --platform=managed
       - --allow-unauthenticated
@@ -31,4 +38,4 @@ steps:
       - --timeout=3600
 
 images:
-  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/cloud-voice/${_SERVICE}:$COMMIT_SHA
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:${_TAG}
