@@ -3,6 +3,24 @@ import { promisify } from 'node:util';
 
 const exec = promisify(execFile);
 
+/**
+ * Run a command and return its combined stdout + stderr **regardless of exit
+ * code**. Many discovery tools (notably `ffmpeg -list_devices`) print to stderr
+ * and/or exit non-zero, so we must not rely on a clean exit. Returns `null`
+ * when the binary itself is missing (ENOENT) so callers can warn helpfully.
+ */
+function runCapture(cmd: string, args: string[]): Promise<string | null> {
+  return new Promise((resolve) => {
+    execFile(cmd, args, { encoding: 'utf8' }, (err, stdout, stderr) => {
+      if (err && (err as NodeJS.ErrnoException).code === 'ENOENT') {
+        resolve(null);
+        return;
+      }
+      resolve(`${stdout ?? ''}\n${stderr ?? ''}`);
+    });
+  });
+}
+
 export interface Device {
   id: string;
   name: string;
@@ -37,21 +55,29 @@ export async function listOutputDevices(): Promise<Device[]> {
 // and their indices to stderr. The index is what we pass to ffmpeg later via
 // `-audio_device_index`, so listing through ffmpeg keeps the ids consistent.
 async function listMacDevices(): Promise<Device[]> {
-  let stderr = '';
-  try {
-    await exec('ffmpeg', ['-hide_banner', '-f', 'audiotoolbox', '-list_devices', 'true', '-i', '']);
-  } catch (err) {
-    // ffmpeg exits non-zero because the dummy input fails — the device list is
-    // still written to stderr, which we read from the thrown error.
-    stderr = (err as { stderr?: string }).stderr ?? '';
+  // ffmpeg prints the device list to stderr and may exit with either code, so
+  // capture the output unconditionally (this is the part that previously fell
+  // back to "default" by accident).
+  const out = await runCapture('ffmpeg', [
+    '-hide_banner',
+    '-f',
+    'audiotoolbox',
+    '-list_devices',
+    'true',
+    '-i',
+    '',
+  ]);
+  if (out === null) {
+    console.warn('[cloud-voice-agent] ffmpeg が見つかりません。`brew install ffmpeg` を実行してください。');
+    return [DEFAULT_DEVICE];
   }
 
   const devices: Device[] = [];
-  for (const line of stderr.split('\n')) {
+  for (const line of out.split('\n')) {
     // Example: "[AudioToolbox @ 0x..] [0] Built-in Output"
     const m = line.match(/\[(\d+)\]\s+(.+?)\s*$/);
     if (m) {
-      devices.push({ id: m[1], name: m[2], isDefault: devices.length === 0 });
+      devices.push({ id: m[1], name: m[2].trim(), isDefault: devices.length === 0 });
     }
   }
   return devices.length > 0 ? devices : [DEFAULT_DEVICE];
