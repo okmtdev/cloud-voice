@@ -63,11 +63,15 @@ WebSocket の双方向リアルタイム通信でつなぎます。
 - Node.js 20 以上（テスト実行には 22 以上）
 - エージェントを動かすマシンに **`ffmpeg`**（再生エンジンとして使用）
   - macOS: `brew install ffmpeg`
-  - Linux (Debian/Ubuntu): `sudo apt install ffmpeg`（出力先選択には PulseAudio / PipeWire を推奨）
+  - Linux (Debian/Ubuntu): `sudo apt install ffmpeg`
 - **スピーカーを複数から選ぶ場合の追加ツール**
   - macOS: `brew install switchaudio-osx`（出力デバイスの列挙・切り替えに使用。
     未導入でも「システム既定の出力」へは再生できます。選択時は **OS の既定出力先が切り替わります**）
-  - Linux: PulseAudio / PipeWire があれば追加ツール不要（sink を直接指定して再生）
+  - Linux: 音声バックエンドを自動判定します。
+    - **PulseAudio / PipeWire** が動いていれば sink を直接指定して再生（追加ツール不要）
+    - 動いていなければ **ALSA** にフォールバック。デバイス列挙には `alsa-utils`
+      （`aplay`）が必要です（`sudo apt install alsa-utils`）。ヘッドレスの
+      Raspberry Pi などはこちらになります
 
 ### 1. インストール
 
@@ -268,6 +272,9 @@ gcloud run deploy cloud-voice \
 
 > **メモ**
 > - WebSocket の長時間接続のため Cloud Run の `--timeout=3600` を指定しています。
+> - イメージタグは既定で `latest` です（手動の `gcloud builds submit` では
+>   `$COMMIT_SHA` が空になるため）。不変タグにしたい場合は
+>   `--substitutions=...,_TAG=$(git rev-parse --short HEAD)` を渡してください。
 > - 認証付きにする場合は `CLOUD_VOICE_TOKEN` をサービスに設定し、
 >   エージェント / ブラウザ双方で同じトークンを使ってください。
 
