@@ -49,38 +49,48 @@ export async function listOutputDevices(): Promise<Device[]> {
   return [DEFAULT_DEVICE];
 }
 
-// ---- macOS (CoreAudio via ffmpeg's audiotoolbox output) ---------------------
+// ---- macOS (CoreAudio via SwitchAudioSource) --------------------------------
 //
-// `ffmpeg -f audiotoolbox -list_devices true -i ""` prints the output devices
-// and their indices to stderr. The index is what we pass to ffmpeg later via
-// `-audio_device_index`, so listing through ffmpeg keeps the ids consistent.
+// ffmpeg's audiotoolbox output device cannot list devices ("Cannot list sinks:
+// Function not implemented"), so we enumerate and switch output devices with
+// SwitchAudioSource (`brew install switchaudio-osx`). Playback always targets
+// the current default device; selecting a speaker switches that default.
 async function listMacDevices(): Promise<Device[]> {
-  // ffmpeg prints the device list to stderr and may exit with either code, so
-  // capture the output unconditionally (this is the part that previously fell
-  // back to "default" by accident).
-  const out = await runCapture('ffmpeg', [
-    '-hide_banner',
-    '-f',
-    'audiotoolbox',
-    '-list_devices',
-    'true',
-    '-i',
-    '',
-  ]);
+  const out = await runCapture('SwitchAudioSource', ['-a', '-t', 'output']);
   if (out === null) {
-    console.warn('[cloud-voice-agent] ffmpeg が見つかりません。`brew install ffmpeg` を実行してください。');
+    console.warn(
+      '[cloud-voice-agent] 複数スピーカーの列挙には SwitchAudioSource が必要です。' +
+        '`brew install switchaudio-osx` を実行してください（未導入でも既定の出力先には再生できます）。'
+    );
     return [DEFAULT_DEVICE];
   }
 
+  const current = (await runCapture('SwitchAudioSource', ['-c', '-t', 'output']))?.trim() ?? '';
   const devices: Device[] = [];
   for (const line of out.split('\n')) {
-    // Example: "[AudioToolbox @ 0x..] [0] Built-in Output"
-    const m = line.match(/\[(\d+)\]\s+(.+?)\s*$/);
-    if (m) {
-      devices.push({ id: m[1], name: m[2].trim(), isDefault: devices.length === 0 });
-    }
+    const name = line.trim();
+    if (!name) continue;
+    // `-c` may print "Current audio device: <name>"; match either form.
+    const isDefault = name === current || current.endsWith(name);
+    devices.push({ id: name, name, isDefault });
+  }
+  if (devices.length > 0 && !devices.some((d) => d.isDefault)) {
+    devices[0].isDefault = true;
   }
   return devices.length > 0 ? devices : [DEFAULT_DEVICE];
+}
+
+/**
+ * Make `deviceId` the active output device. On macOS this switches the system
+ * default output (via SwitchAudioSource) since ffmpeg renders to the default.
+ * On Linux selection happens at playback time (pulse `-device`), so this is a
+ * no-op there.
+ */
+export async function activateDevice(deviceId: string): Promise<boolean> {
+  if (process.platform !== 'darwin') return true;
+  if (!deviceId || deviceId === DEFAULT_DEVICE.id) return true;
+  const result = await runCapture('SwitchAudioSource', ['-s', deviceId, '-t', 'output']);
+  return result !== null;
 }
 
 // ---- Linux (PulseAudio / PipeWire sinks) ------------------------------------

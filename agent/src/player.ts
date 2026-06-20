@@ -108,10 +108,12 @@ export class Player {
   private outputArgs(): string[] {
     const isDefault = !this.deviceId || this.deviceId === DEFAULT_DEVICE.id;
     if (process.platform === 'darwin') {
-      const args = ['-f', 'audiotoolbox'];
-      if (!isDefault) args.push('-audio_device_index', this.deviceId);
-      args.push('-'); // audiotoolbox output muxer takes a dummy output arg
-      return args;
+      // ffmpeg's audiotoolbox output device cannot enumerate devices, and its
+      // -audio_device_index maps to an opaque CoreAudio ordering. So on macOS
+      // we always render to the *current default* output device; choosing a
+      // speaker is done by switching the system default (see devices.ts /
+      // activateDevice, backed by SwitchAudioSource).
+      return ['-f', 'audiotoolbox', '-'];
     }
     if (process.platform === 'linux') {
       const args = ['-f', 'pulse'];

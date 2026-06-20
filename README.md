@@ -64,6 +64,10 @@ WebSocket の双方向リアルタイム通信でつなぎます。
 - エージェントを動かすマシンに **`ffmpeg`**（再生エンジンとして使用）
   - macOS: `brew install ffmpeg`
   - Linux (Debian/Ubuntu): `sudo apt install ffmpeg`（出力先選択には PulseAudio / PipeWire を推奨）
+- **スピーカーを複数から選ぶ場合の追加ツール**
+  - macOS: `brew install switchaudio-osx`（出力デバイスの列挙・切り替えに使用。
+    未導入でも「システム既定の出力」へは再生できます。選択時は **OS の既定出力先が切り替わります**）
+  - Linux: PulseAudio / PipeWire があれば追加ツール不要（sink を直接指定して再生）
 
 ### 1. インストール
 

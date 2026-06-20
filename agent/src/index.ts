@@ -1,6 +1,6 @@
 import { WebSocket, type RawData } from 'ws';
 import { loadConfig, assertConfig, type Config } from './config.js';
-import { listOutputDevices } from './devices.js';
+import { listOutputDevices, activateDevice } from './devices.js';
 import { Player } from './player.js';
 
 const RECONNECT_MIN_MS = 1_000;
@@ -103,9 +103,7 @@ class Agent {
         void this.reportDevices();
         break;
       case 'select-device':
-        this.player.setDevice(String(msg.deviceId));
-        log('output device set to', msg.deviceId);
-        void this.reportDevices();
+        void this.selectDevice(String(msg.deviceId));
         break;
       case 'audio-begin':
         log(`audio-begin: ${msg.mode} ${msg.format} ${msg.filename ?? ''}`.trim());
@@ -122,6 +120,22 @@ class Agent {
         this.sendJson({ type: 'pong', t: msg.t as number });
         break;
     }
+  }
+
+  private async selectDevice(deviceId: string): Promise<void> {
+    const ok = await activateDevice(deviceId);
+    this.player.setDevice(deviceId);
+    if (ok) {
+      log('output device set to', deviceId);
+    } else {
+      log('failed to switch output device to', deviceId, '(is SwitchAudioSource installed?)');
+      this.sendJson({
+        type: 'status',
+        state: 'error',
+        message: `出力先を切り替えできませんでした: ${deviceId}`,
+      });
+    }
+    await this.reportDevices();
   }
 
   private async reportDevices(): Promise<void> {
