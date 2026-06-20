@@ -5,6 +5,9 @@ import express from 'express';
 import { WebSocketServer, WebSocket, type RawData } from 'ws';
 import { RoomRegistry, type Peer } from './rooms.js';
 import type { Role, ServerMsg } from './types.js';
+import { loadDotEnv } from './env.js';
+
+loadDotEnv();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

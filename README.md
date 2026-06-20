@@ -115,28 +115,199 @@ node dist/index.js --server=ws://localhost:8080 --room=kitchen-1234
 
 ---
 
-## ☁️ GCP (Cloud Run) へのデプロイ
+## 🛠️ ローカル開発
 
-WebSocket をそのまま扱える Cloud Run が手軽でおすすめです。
+ホットリロード付きで、サーバーとエージェントを同時に動かしながら開発できます。
+
+### 前提
+
+- Node.js 20 以上（`.nvmrc` あり。`nvm use` で固定できます）
+- エージェント側のマシンに `ffmpeg`（音声を実際に鳴らす場合）
+
+### セットアップ
 
 ```bash
-# Artifact Registry リポジトリを用意（初回のみ）
+npm install                       # ルートで一度だけ。workspaces を一括インストール
+
+# 環境変数ファイルを用意（任意・ローカルでは未設定でも動きます）
+cp server/.env.example server/.env
+cp agent/.env.example  agent/.env   # CLOUD_VOICE_SERVER=ws://localhost:8080 などに編集
+```
+
+`server/.env` / `agent/.env` は git 管理外（`.gitignore` 済み）です。
+実際の環境変数が常に `.env` より優先されます。
+
+### 起動（ターミナルを 2 つ使用）
+
+```bash
+# ターミナル A — リレーサーバー（tsx watch で自動再起動）
+npm run dev:server
+# → http://localhost:8080
+
+# ターミナル B — 常駐エージェント（ソース変更で自動再起動）
+npm run dev:agent
+# agent/.env に CLOUD_VOICE_SERVER / CLOUD_VOICE_ROOM を設定しておくこと
+```
+
+ビルド成果物を使って動かす場合は、`npm run build` のあと
+`npm run start:server` / `npm run start:agent` を使います。
+
+### よく使うコマンド
+
+| コマンド                | 内容                                               |
+| ----------------------- | -------------------------------------------------- |
+| `npm run dev:server`    | サーバーをホットリロードで起動。                   |
+| `npm run dev:agent`     | エージェントをホットリロードで起動。               |
+| `npm run build`         | 全 workspace を TypeScript ビルド。                |
+| `npm run typecheck`     | 型チェックのみ（`lint` も同じ）。                  |
+| `npm run start:server`  | ビルド済みサーバーを起動。                         |
+| `npm run start:agent`   | ビルド済みエージェントを起動。                     |
+
+### 開発のヒント
+
+- `ffmpeg` が無い環境でも、リレー・WebSocket・Web UI の挙動はそのまま確認できます
+  （音声再生のみエージェント側で `ffmpeg が見つかりません` の status になります）。
+- エージェントの出力デバイス id を調べるには
+  `cd agent && node dist/index.js --list-devices`（または `npm run build` 後に実行）。
+- ブラウザのマイク入力は `localhost` または HTTPS でのみ許可されます。
+
+---
+
+## ☁️ デプロイ
+
+サーバー（クラウド側のインフラ）とエージェント（各マシンのアプリ）を別々にデプロイします。
+
+### A. インフラ準備（初回のみ）
+
+WebSocket をそのまま扱える **GCP Cloud Run** を使います。
+
+```bash
+# 1. プロジェクトを選択
+gcloud config set project YOUR_PROJECT_ID
+
+# 2. 必要な API を有効化
+gcloud services enable \
+  run.googleapis.com \
+  cloudbuild.googleapis.com \
+  artifactregistry.googleapis.com
+
+# 3. コンテナイメージ用の Artifact Registry リポジトリを作成
 gcloud artifacts repositories create cloud-voice \
   --repository-format=docker --location=asia-northeast1
+```
 
-# ビルド & デプロイ
+### B. アプリケーションのデプロイ — リレーサーバー
+
+付属の Cloud Build 設定で、ビルド → push → Cloud Run デプロイまで一括実行できます。
+
+```bash
 gcloud builds submit --config server/cloudbuild.yaml \
   --substitutions=_REGION=asia-northeast1,_SERVICE=cloud-voice
 ```
 
+本番で共有シークレットを使う場合は、サービスに環境変数を設定します。
+
+```bash
+gcloud run services update cloud-voice \
+  --region=asia-northeast1 \
+  --set-env-vars=CLOUD_VOICE_TOKEN=your-strong-secret
+```
+
 デプロイ後に払い出される `https://cloud-voice-xxxx.a.run.app` を、
-エージェントの `CLOUD_VOICE_SERVER` に **`wss://` で** 設定してください。
+エージェントの `CLOUD_VOICE_SERVER` に **`wss://` で**（`https` ではなく）設定します。
+
+<details>
+<summary>Cloud Build を使わず手動でビルド・デプロイする場合</summary>
+
+```bash
+REGION=asia-northeast1
+IMAGE=$REGION-docker.pkg.dev/YOUR_PROJECT_ID/cloud-voice/cloud-voice:latest
+
+docker build -t "$IMAGE" server
+docker push "$IMAGE"
+gcloud run deploy cloud-voice \
+  --image="$IMAGE" --region="$REGION" --platform=managed \
+  --allow-unauthenticated --port=8080 --timeout=3600
+```
+
+</details>
 
 > **メモ**
-> - WebSocket の長時間接続のため `--timeout=3600` を指定しています。
-> - 認証付きにしたい場合は Cloud Run に `CLOUD_VOICE_TOKEN` 環境変数を設定し、
+> - WebSocket の長時間接続のため Cloud Run の `--timeout=3600` を指定しています。
+> - 認証付きにする場合は `CLOUD_VOICE_TOKEN` をサービスに設定し、
 >   エージェント / ブラウザ双方で同じトークンを使ってください。
-> - 簡易な手動コンテナビルドは `server/Dockerfile` を直接利用できます。
+
+### C. アプリケーションのデプロイ — 常駐エージェント
+
+スピーカーを鳴らしたい各マシンに配置し、**常時起動**させます。
+
+```bash
+git clone https://github.com/okmtdev/cloud-voice.git
+cd cloud-voice && npm install && npm run build
+cd agent && cp .env.example .env   # CLOUD_VOICE_SERVER=wss://... ROOM / TOKEN を設定
+node dist/index.js --list-devices  # 出力デバイス id を確認
+```
+
+#### Linux（systemd で常駐化）
+
+`/etc/systemd/system/cloud-voice-agent.service`:
+
+```ini
+[Unit]
+Description=Cloud Voice Agent
+After=network-online.target sound.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/opt/cloud-voice/agent
+ExecStart=/usr/bin/node dist/index.js
+Restart=always
+RestartSec=5
+User=YOUR_USER
+EnvironmentFile=/opt/cloud-voice/agent/.env
+
+[Install]
+WantedBy=default.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now cloud-voice-agent
+journalctl -u cloud-voice-agent -f   # ログ確認
+```
+
+#### macOS（launchd で常駐化）
+
+`~/Library/LaunchAgents/com.cloudvoice.agent.plist`:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>Label</key><string>com.cloudvoice.agent</string>
+    <key>ProgramArguments</key>
+    <array>
+      <string>/usr/local/bin/node</string>
+      <string>/Users/YOU/cloud-voice/agent/dist/index.js</string>
+    </array>
+    <key>WorkingDirectory</key><string>/Users/YOU/cloud-voice/agent</string>
+    <key>RunAtLoad</key><true/>
+    <key>KeepAlive</key><true/>
+    <key>StandardErrorPath</key><string>/tmp/cloud-voice-agent.log</string>
+    <key>StandardOutPath</key><string>/tmp/cloud-voice-agent.log</string>
+  </dict>
+</plist>
+```
+
+```bash
+launchctl load ~/Library/LaunchAgents/com.cloudvoice.agent.plist
+launchctl start com.cloudvoice.agent
+```
+
+> launchd は `.env` を自動読込しないため、`agent/.env` を配置するか、
+> plist の `EnvironmentVariables` に `CLOUD_VOICE_SERVER` などを記載してください。
 
 ---
 
