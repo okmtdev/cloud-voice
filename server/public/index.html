@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#1b0b33" />
+    <title>Cloud Voice — どこの部屋のスピーカーも、あなたの声で。</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark">🔊</span>
+          <span class="brand-name">Cloud Voice</span>
+        </div>
+        <nav class="stepper" id="stepper" aria-label="ステップ">
+          <button class="dot is-active" data-step="0"><span>1</span>つなぐ</button>
+          <button class="dot" data-step="1"><span>2</span>スピーカー</button>
+          <button class="dot" data-step="2"><span>3</span>鳴らす</button>
+        </nav>
+      </header>
+
+      <div class="viewport" id="viewport">
+        <div class="track" id="track">
+          <!-- Step 1: Connect -->
+          <section class="panel" aria-label="つなぐ">
+            <article class="card">
+              <div class="card-head">
+                <h2>1. つなぐ</h2>
+                <div class="status-group">
+                  <span id="conn-status" class="badge badge-off">未接続</span>
+                  <span id="agent-status" class="badge badge-off">スピーカー 待機なし</span>
+                </div>
+              </div>
+              <div class="card-body">
+                <label class="field">
+                  <span class="field-label">ペアリングコード</span>
+                  <input id="room" placeholder="例: kitchen-1234" autocomplete="off" inputmode="text" />
+                </label>
+                <label class="field">
+                  <span class="field-label">トークン（任意）</span>
+                  <input id="token" placeholder="サーバーで設定した場合のみ" autocomplete="off" />
+                </label>
+              </div>
+              <div class="card-foot">
+                <button id="connect-btn" class="btn btn-primary">接続</button>
+                <button id="to-2" class="btn btn-next" data-go="1" disabled>次へ →</button>
+              </div>
+            </article>
+          </section>
+
+          <!-- Step 2: Choose speaker -->
+          <section class="panel" aria-label="スピーカーを選ぶ">
+            <article class="card">
+              <div class="card-head">
+                <h2>2. スピーカーを選ぶ</h2>
+                <div class="status-group">
+                  <span id="device-status" class="badge badge-muted">未取得</span>
+                </div>
+              </div>
+              <div class="card-body">
+                <label class="field">
+                  <span class="field-label">出力スピーカー</span>
+                  <select id="device-select"></select>
+                </label>
+                <button id="refresh-btn" class="btn btn-ghost">再取得</button>
+                <p class="hint">選んだスピーカーから音が鳴ります（macOS では OS の既定出力が切り替わります）。</p>
+              </div>
+              <div class="card-foot">
+                <button class="btn btn-back" data-go="0">← 前へ</button>
+                <button id="to-3" class="btn btn-next" data-go="2">次へ →</button>
+              </div>
+            </article>
+          </section>
+
+          <!-- Step 3: Play -->
+          <section class="panel" aria-label="鳴らす">
+            <article class="card">
+              <div class="card-head">
+                <h2>3. 鳴らす</h2>
+                <div class="status-group">
+                  <span id="play-status" class="badge badge-idle">idle</span>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="tile">
+                  <h3>🎵 ファイルを送る</h3>
+                  <p class="hint">wav / mp3 などをアップロードして再生します。</p>
+                  <input id="file-input" type="file" accept="audio/*,.wav,.mp3,.ogg,.m4a" />
+                  <button id="play-file-btn" class="btn btn-primary" disabled>再生</button>
+                </div>
+                <div class="tile">
+                  <h3>🎙️ マイクで話す</h3>
+                  <p class="hint">マイク入力をほぼリアルタイムでスピーカーへ。</p>
+                  <button id="mic-btn" class="btn btn-primary">録音開始</button>
+                </div>
+              </div>
+              <div class="card-foot">
+                <button class="btn btn-back" data-go="1">← 前へ</button>
+                <button id="stop-btn" class="btn btn-danger">停止</button>
+              </div>
+            </article>
+          </section>
+        </div>
+      </div>
+
+      <details class="log-wrap">
+        <summary>ログ</summary>
+        <pre id="log" aria-live="polite"></pre>
+      </details>
+    </div>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
