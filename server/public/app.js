@@ -1,18 +1,23 @@
-// Cloud Voice — browser client (upload + microphone).
+// Cloud Voice — browser client (3-step wizard: connect → choose → play).
 // Talks to the relay over a single WebSocket. See ../protocol.md.
 
 const $ = (id) => document.getElementById(id);
 
 const els = {
+  stepper: $('stepper'),
+  viewport: $('viewport'),
+  track: $('track'),
+  // step 1
   room: $('room'),
   token: $('token'),
   connectBtn: $('connect-btn'),
   connStatus: $('conn-status'),
   agentStatus: $('agent-status'),
-  deviceCard: $('device-card'),
+  // step 2
   deviceSelect: $('device-select'),
+  deviceStatus: $('device-status'),
   refreshBtn: $('refresh-btn'),
-  playCard: $('play-card'),
+  // step 3
   fileInput: $('file-input'),
   playFileBtn: $('play-file-btn'),
   micBtn: $('mic-btn'),
@@ -22,20 +27,102 @@ const els = {
 };
 
 const CHUNK_SIZE = 64 * 1024;
+const STEP_COUNT = 3;
 
 let ws = null;
+let connected = false;
 let mediaRecorder = null;
 let micStream = null;
 let micStreamId = null;
+
+// ---- Wizard navigation ------------------------------------------------------
+
+let currentStep = 0;
+// Steps 2 and 3 are only reachable once connected.
+function maxStep() {
+  return connected ? STEP_COUNT - 1 : 0;
+}
+
+function renderStep() {
+  els.track.style.transition = '';
+  els.track.style.transform = `translateX(-${currentStep * 100}%)`;
+  [...els.stepper.children].forEach((dot, i) => {
+    dot.classList.toggle('is-active', i === currentStep);
+    dot.classList.toggle('is-done', i < currentStep && connected);
+    dot.disabled = i > maxStep();
+  });
+}
+
+function goTo(step) {
+  const target = Math.max(0, Math.min(step, maxStep()));
+  currentStep = target;
+  renderStep();
+}
+
+function next() {
+  goTo(currentStep + 1);
+}
+function prev() {
+  goTo(currentStep - 1);
+}
+
+// Buttons with data-go="N" jump to that step.
+document.querySelectorAll('[data-go]').forEach((btn) => {
+  btn.addEventListener('click', () => goTo(Number(btn.dataset.go)));
+});
+[...els.stepper.children].forEach((dot) => {
+  dot.addEventListener('click', () => goTo(Number(dot.dataset.step)));
+});
+
+// ---- Swipe (pointer drag) ---------------------------------------------------
+
+let dragStartX = null;
+let dragDX = 0;
+let dragging = false;
+
+els.viewport.addEventListener('pointerdown', (e) => {
+  // Don't hijack interactions with form controls.
+  if (e.target.closest('input, select, button, summary, textarea, a')) return;
+  dragStartX = e.clientX;
+  dragging = true;
+  dragDX = 0;
+  els.track.style.transition = 'none';
+});
+
+window.addEventListener('pointermove', (e) => {
+  if (!dragging) return;
+  dragDX = e.clientX - dragStartX;
+  // Rubber-band at the edges / locked steps.
+  const atStart = currentStep <= 0 && dragDX > 0;
+  const atEnd = currentStep >= maxStep() && dragDX < 0;
+  const dx = atStart || atEnd ? dragDX * 0.25 : dragDX;
+  const w = els.viewport.clientWidth || 1;
+  els.track.style.transform = `translateX(${-currentStep * w + dx}px)`;
+});
+
+function endDrag() {
+  if (!dragging) return;
+  dragging = false;
+  const w = els.viewport.clientWidth || 1;
+  if (dragDX < -w * 0.18) next();
+  else if (dragDX > w * 0.18) prev();
+  else renderStep();
+  dragDX = 0;
+}
+window.addEventListener('pointerup', endDrag);
+window.addEventListener('pointercancel', endDrag);
+window.addEventListener('resize', renderStep);
+
+// ---- Helpers ----------------------------------------------------------------
 
 function log(...args) {
   const line = `[${new Date().toLocaleTimeString()}] ${args.join(' ')}`;
   els.log.textContent = `${line}\n${els.log.textContent}`.slice(0, 8000);
 }
 
-function setBadge(el, text, cls) {
+function setBadge(el, text, variant) {
   el.textContent = text;
-  el.className = `badge ${cls}`;
+  el.className = `badge badge-${variant}`;
 }
 
 function newStreamId() {
@@ -45,6 +132,21 @@ function newStreamId() {
 function send(obj) {
   if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
 }
+
+function setConnected(state) {
+  connected = state;
+  els.connStatus.textContent = state ? '接続中' : '未接続';
+  els.connStatus.className = `badge ${state ? 'badge-on' : 'badge-off'}`;
+  $('to-2').disabled = !state;
+  if (!state) goTo(0); // can't stay on later steps while disconnected
+  else renderStep();
+}
+
+function setAgent(online) {
+  setBadge(els.agentStatus, online ? 'スピーカー 接続中' : 'スピーカー 待機なし', online ? 'on' : 'off');
+}
+
+// ---- WebSocket --------------------------------------------------------------
 
 function connect() {
   const room = els.room.value.trim();
@@ -61,21 +163,23 @@ function connect() {
   if (token) params.set('token', token);
   const url = `${proto}://${location.host}/ws?${params}`;
 
-  if (ws) ws.close();
+  if (ws) {
+    ws.onclose = null;
+    ws.close();
+  }
+  els.connStatus.textContent = '接続中…';
   ws = new WebSocket(url);
   ws.binaryType = 'arraybuffer';
 
   ws.addEventListener('open', () => {
-    setBadge(els.connStatus, '接続中', 'online');
-    els.deviceCard.hidden = false;
-    els.playCard.hidden = false;
+    setConnected(true);
     log('サーバーに接続しました');
     send({ type: 'list-devices' });
   });
 
   ws.addEventListener('close', () => {
-    setBadge(els.connStatus, '未接続', 'offline');
-    setBadge(els.agentStatus, 'スピーカー: 待機なし', 'offline');
+    setConnected(false);
+    setAgent(false);
     log('切断しました');
   });
 
@@ -100,14 +204,11 @@ function handleMessage(msg) {
       break;
     case 'error':
       log(`エラー: ${msg.message}`);
+      if (/unauthorized/i.test(msg.message)) setConnected(false);
       break;
     case 'peer':
       if (msg.role === 'agent') {
-        setBadge(
-          els.agentStatus,
-          msg.online ? 'スピーカー: 接続中' : 'スピーカー: 待機なし',
-          msg.online ? 'online' : 'offline'
-        );
+        setAgent(msg.online);
         if (msg.online) send({ type: 'list-devices' });
       }
       break;
@@ -118,7 +219,7 @@ function handleMessage(msg) {
       setBadge(
         els.playStatus,
         msg.state,
-        msg.state === 'playing' ? 'playing' : msg.state === 'error' ? 'offline' : 'idle'
+        msg.state === 'playing' ? 'playing' : msg.state === 'error' ? 'off' : 'idle'
       );
       if (msg.message) log(`status: ${msg.state} ${msg.message}`);
       break;
@@ -136,6 +237,7 @@ function renderDevices(devices, selectedId) {
     opt.disabled = true;
     els.deviceSelect.append(opt);
     els.playFileBtn.disabled = true;
+    setBadge(els.deviceStatus, '未取得', 'muted');
     return;
   }
   for (const d of devices) {
@@ -146,6 +248,8 @@ function renderDevices(devices, selectedId) {
     els.deviceSelect.append(opt);
   }
   els.playFileBtn.disabled = false;
+  const sel = devices.find((d) => d.id === selectedId) ?? devices[0];
+  setBadge(els.deviceStatus, sel ? sel.name : `${devices.length} 台`, 'on');
   log(`${devices.length} 個の出力デバイスを取得`);
 }
 
@@ -205,7 +309,9 @@ async function toggleMic() {
   });
   mediaRecorder.start(250); // emit a chunk every 250ms for low latency
   els.micBtn.textContent = '録音停止';
-  els.micBtn.classList.add('danger');
+  els.micBtn.classList.add('is-recording');
+  els.micBtn.classList.remove('btn-primary');
+  els.micBtn.classList.add('btn-danger');
   log('マイク入力を開始');
 }
 
@@ -217,7 +323,8 @@ function stopMic() {
   micStream = null;
   micStreamId = null;
   els.micBtn.textContent = '録音開始';
-  els.micBtn.classList.remove('danger');
+  els.micBtn.classList.remove('is-recording', 'btn-danger');
+  els.micBtn.classList.add('btn-primary');
   log('マイク入力を停止');
 }
 
@@ -235,6 +342,11 @@ els.stopBtn.addEventListener('click', () => {
   send({ type: 'stop' });
 });
 
-// Restore last-used room/token.
+// Restore last-used room/token and auto-connect when a code is stored.
 els.room.value = localStorage.getItem('cv.room') ?? '';
 els.token.value = localStorage.getItem('cv.token') ?? '';
+renderStep();
+if (els.room.value) {
+  log('保存済みのペアリングコードで自動接続します…');
+  connect();
+}
