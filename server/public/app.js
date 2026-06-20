@@ -18,6 +18,8 @@ const els = {
   deviceStatus: $('device-status'),
   refreshBtn: $('refresh-btn'),
   // step 3
+  volume: $('volume'),
+  volumeValue: $('volume-value'),
   fileInput: $('file-input'),
   playFileBtn: $('play-file-btn'),
   micBtn: $('mic-btn'),
@@ -34,6 +36,12 @@ let connected = false;
 let mediaRecorder = null;
 let micStream = null;
 let micStreamId = null;
+// WebAudio chain used to attenuate the mic before sending (live volume).
+let audioCtx = null;
+let micGain = null;
+
+// Master volume as a linear gain (1.0 = 100%).
+let volume = 0.7;
 
 // ---- Wizard navigation ------------------------------------------------------
 
@@ -270,6 +278,7 @@ async function playFile() {
     mode: 'file',
     filename: file.name,
     mime: file.type,
+    volume, // files are scaled on the agent (no WebAudio path)
   });
 
   const buf = await file.arrayBuffer();
@@ -298,10 +307,21 @@ async function toggleMic() {
     ? 'audio/webm;codecs=opus'
     : 'audio/webm';
 
-  micStreamId = newStreamId();
-  send({ type: 'audio-begin', streamId: micStreamId, format: 'webm', mode: 'mic', mime });
+  // Route the mic through a GainNode so the volume slider takes effect live,
+  // before the audio is encoded and sent.
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const source = audioCtx.createMediaStreamSource(micStream);
+  micGain = audioCtx.createGain();
+  micGain.gain.value = volume;
+  const dest = audioCtx.createMediaStreamDestination();
+  source.connect(micGain);
+  micGain.connect(dest);
 
-  mediaRecorder = new MediaRecorder(micStream, { mimeType: mime });
+  micStreamId = newStreamId();
+  // Mic is already attenuated here, so tell the agent to play it at unity gain.
+  send({ type: 'audio-begin', streamId: micStreamId, format: 'webm', mode: 'mic', mime, volume: 1 });
+
+  mediaRecorder = new MediaRecorder(dest.stream, { mimeType: mime });
   mediaRecorder.addEventListener('dataavailable', async (e) => {
     if (e.data && e.data.size > 0 && ws?.readyState === WebSocket.OPEN) {
       ws.send(await e.data.arrayBuffer());
@@ -319,6 +339,9 @@ function stopMic() {
   if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
   micStream?.getTracks().forEach((t) => t.stop());
   if (micStreamId) send({ type: 'audio-end', streamId: micStreamId });
+  audioCtx?.close().catch(() => {});
+  audioCtx = null;
+  micGain = null;
   mediaRecorder = null;
   micStream = null;
   micStreamId = null;
@@ -329,6 +352,15 @@ function stopMic() {
 }
 
 // ---- Wiring -----------------------------------------------------------------
+
+function applyVolume(percent) {
+  volume = Math.max(0, percent) / 100;
+  els.volumeValue.textContent = `${percent}%`;
+  if (micGain) micGain.gain.value = volume; // live update while talking
+  localStorage.setItem('cv.volume', String(percent));
+}
+
+els.volume.addEventListener('input', () => applyVolume(Number(els.volume.value)));
 
 els.connectBtn.addEventListener('click', connect);
 els.refreshBtn.addEventListener('click', () => send({ type: 'list-devices' }));
@@ -341,6 +373,14 @@ els.stopBtn.addEventListener('click', () => {
   stopMic();
   send({ type: 'stop' });
 });
+
+// Restore the saved volume (default 70% when none is stored).
+const savedVolume = localStorage.getItem('cv.volume');
+const initialVolume = savedVolume !== null && Number.isFinite(Number(savedVolume))
+  ? Number(savedVolume)
+  : 70;
+els.volume.value = String(initialVolume);
+applyVolume(initialVolume);
 
 // Restore last-used room/token and auto-connect when a code is stored.
 els.room.value = localStorage.getItem('cv.room') ?? '';

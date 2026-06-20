@@ -128,6 +128,7 @@ node dist/index.js --server=ws://localhost:8080 --room=kitchen-1234
 2. エージェントと同じ **ペアリングコード**（room）を入力して「接続」
 3. スピーカー（出力デバイス）を選ぶ
 4. **wav / mp3 をアップロード**するか、**マイクの「録音開始」**を押す → 遠隔スピーカーが鳴ります 🎉
+5. **音量スライダー**で出力音量を調整（マイクは話しながら即時反映、ファイルは再生時に反映）
 
 ---
 
@@ -291,6 +292,13 @@ node dist/index.js --list-devices  # 出力デバイス id を確認
 
 #### Linux（systemd で常駐化）
 
+> ⚠️ **Node のパスに注意。** systemd はログインシェルの PATH を使わないため、
+> `nvm` で入れた Node は見えません。`ExecStart` には **Node 20 以上の絶対パス**を
+> 指定してください（`which node` で確認）。apt 標準の `/usr/bin/node` が古いと
+> `SyntaxError: Unexpected token {`（ESM 非対応）で起動に失敗します。デーモン運用
+> では NodeSource などでシステム全体に新しい Node を入れるのが堅実です:
+> `curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt install -y nodejs`
+
 `/etc/systemd/system/cloud-voice-agent.service`:
 
 ```ini
@@ -301,6 +309,7 @@ Wants=network-online.target
 
 [Service]
 WorkingDirectory=/opt/cloud-voice/agent
+# `which node` の結果（Node 20+ の絶対パス）を指定する。
 ExecStart=/usr/bin/node dist/index.js
 Restart=always
 RestartSec=5

@@ -53,13 +53,17 @@ Every JSON message has a `type` field.
 | -------------- | --------------------------------------------------- | -------------------------------------------------- |
 | `list-devices` | —                                                   | Ask the agent to report its output devices.        |
 | `select-device`| `deviceId: string`                                  | Choose which speaker future audio plays from.      |
-| `audio-begin`  | `streamId, format, filename?, mime?, mode`          | A new audio stream starts. `mode` = `file`\|`mic`. |
+| `audio-begin`  | `streamId, format, filename?, mime?, mode, volume?` | A new audio stream starts. `mode` = `file`\|`mic`. |
 | `audio-end`    | `streamId`                                          | The stream is complete; flush and finish playback. |
 | `stop`         | —                                                   | Stop whatever is currently playing immediately.    |
 | `ping`         | `t: number`                                         | Liveness / latency probe.                          |
 
 `format` is a hint such as `wav`, `mp3`, `webm`, `ogg`. The agent relies on
 ffmpeg to auto-detect the real container, so the hint is advisory.
+
+`volume` is an optional linear gain (default `1.0`) the agent applies to this
+stream via ffmpeg's `volume` filter. Microphone streams that are already
+attenuated in the browser (WebAudio gain) send `1.0` to avoid double scaling.
 
 Binary frames sent after an `audio-begin` (and before its `audio-end`) are the
 audio bytes for that `streamId`.

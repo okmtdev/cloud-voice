@@ -107,7 +107,7 @@ class Agent {
         break;
       case 'audio-begin':
         log(`audio-begin: ${msg.mode} ${msg.format} ${msg.filename ?? ''}`.trim());
-        this.player.begin(String(msg.streamId));
+        this.player.begin(String(msg.streamId), typeof msg.volume === 'number' ? msg.volume : 1);
         break;
       case 'audio-end':
         this.player.end();

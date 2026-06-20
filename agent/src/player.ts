@@ -35,11 +35,23 @@ export class Player {
   }
 
   /** Begin a new playback stream; any current stream is stopped first. */
-  begin(streamId: string): void {
+  begin(streamId: string, volume = 1): void {
     this.stop();
     this.currentStreamId = streamId;
 
-    const args = ['-hide_banner', '-loglevel', 'error', '-i', 'pipe:0', ...this.outputArgs()];
+    // Linear gain applied just before the output device. `volume=1` is a no-op,
+    // so only add the filter when the cloud UI asked for something else.
+    const v = Math.max(0, Math.min(volume, 4));
+    const filter = v !== 1 ? ['-af', `volume=${v.toFixed(3)}`] : [];
+    const args = [
+      '-hide_banner',
+      '-loglevel',
+      'error',
+      '-i',
+      'pipe:0',
+      ...filter,
+      ...this.outputArgs(),
+    ];
     const proc = spawn('ffmpeg', args, { stdio: ['pipe', 'ignore', 'pipe'] });
     this.proc = proc;
 
