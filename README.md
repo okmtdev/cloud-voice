@@ -60,7 +60,7 @@ WebSocket の双方向リアルタイム通信でつなぎます。
 
 ### 必要なもの
 
-- Node.js 20 以上
+- Node.js 20 以上（テスト実行には 22 以上）
 - エージェントを動かすマシンに **`ffmpeg`**（再生エンジンとして使用）
   - macOS: `brew install ffmpeg`
   - Linux (Debian/Ubuntu): `sudo apt install ffmpeg`（出力先選択には PulseAudio / PipeWire を推奨）
@@ -121,7 +121,7 @@ node dist/index.js --server=ws://localhost:8080 --room=kitchen-1234
 
 ### 前提
 
-- Node.js 20 以上（`.nvmrc` あり。`nvm use` で固定できます）
+- Node.js 22 以上推奨（`.nvmrc` あり。`nvm use` で固定。アプリ稼働は 20 以上、テスト実行は 22 以上）
 - エージェント側のマシンに `ffmpeg`（音声を実際に鳴らす場合）
 
 ### セットアップ
@@ -160,8 +160,30 @@ npm run dev:agent
 | `npm run dev:agent`     | エージェントをホットリロードで起動。               |
 | `npm run build`         | 全 workspace を TypeScript ビルド。                |
 | `npm run typecheck`     | 型チェックのみ（`lint` も同じ）。                  |
+| `npm test`              | 単体テストを実行（Node 標準テストランナー）。      |
 | `npm run start:server`  | ビルド済みサーバーを起動。                         |
 | `npm run start:agent`   | ビルド済みエージェントを起動。                     |
+
+### テスト
+
+追加の依存ゼロで、Node 標準のテストランナー（`node:test`）を使っています。
+TypeScript はビルド不要で、型ストリッピングを使うため **Node 22 以上** が必要です。
+
+```bash
+npm test
+```
+
+対象は外部依存のない中核ロジックです。
+
+- `server/test/rooms.test.ts` — 部屋（ペアリング）と中継ロジック
+- `server/test/env.test.ts` — `.env` ローダ
+- `agent/test/config.test.ts` — 設定 / フラグのパース
+
+### CI
+
+[`.github/workflows/ci.yml`](./.github/workflows/ci.yml) が、push と PR で
+**型チェック → ビルド → テスト** を実行します。結果（成功 / 失敗）は GitHub の
+チェックとして **PR 上に自動で表示** されます。
 
 ### 開発のヒント
 

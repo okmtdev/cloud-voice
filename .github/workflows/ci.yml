@@ -1,0 +1,35 @@
+name: CI
+
+# Runs on pushes to any branch and on pull requests. The job's pass/fail
+# status is reported back to the PR as a GitHub check automatically.
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  build-and-test:
+    name: Build & test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          # Node 22 ships the built-in test runner with TypeScript type
+          # stripping, which `npm test` relies on (no test framework needed).
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Unit tests
+        run: npm test
