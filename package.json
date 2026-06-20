@@ -1,0 +1,24 @@
+{
+  "name": "cloud-voice",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Send your voice to the cloud, hear it from any speaker. A realtime bridge between a web service and the speakers on your Mac / Linux machine.",
+  "license": "MIT",
+  "author": "Yuki Nakajima",
+  "workspaces": [
+    "server",
+    "agent"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "dev:server": "npm run dev --workspace server",
+    "dev:agent": "npm run dev --workspace agent",
+    "start:server": "npm run start --workspace server",
+    "start:agent": "npm run start --workspace agent",
+    "lint": "npm run typecheck --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

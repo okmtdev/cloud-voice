@@ -1,0 +1,34 @@
+# Build & deploy the Cloud Voice relay to Cloud Run.
+#   gcloud builds submit --config server/cloudbuild.yaml \
+#     --substitutions=_REGION=asia-northeast1,_SERVICE=cloud-voice
+substitutions:
+  _REGION: asia-northeast1
+  _SERVICE: cloud-voice
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/cloud-voice/${_SERVICE}:$COMMIT_SHA
+      - server
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/cloud-voice/${_SERVICE}:$COMMIT_SHA
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/cloud-voice/${_SERVICE}:$COMMIT_SHA
+      - --region=${_REGION}
+      - --platform=managed
+      - --allow-unauthenticated
+      - --port=8080
+      # WebSockets need request timeouts long enough for long-lived connections.
+      - --timeout=3600
+
+images:
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/cloud-voice/${_SERVICE}:$COMMIT_SHA

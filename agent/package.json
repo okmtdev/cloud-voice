@@ -1,0 +1,27 @@
+{
+  "name": "@cloud-voice/agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cloud Voice desktop agent — always-on speaker output for Mac / Linux.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "cloud-voice-agent": "dist/index.js"
+  },
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/ws": "^8.5.10",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0"
+  }
+}

@@ -1,0 +1,182 @@
+:root {
+  --bg: #0b1020;
+  --card: #151b30;
+  --sub: #1d2540;
+  --text: #e7ecff;
+  --muted: #8a93b5;
+  --accent: #5b8cff;
+  --accent-2: #18d0a0;
+  --danger: #ff5b6e;
+  --radius: 14px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Hiragino Sans",
+    "Noto Sans JP", sans-serif;
+  background: radial-gradient(1200px 600px at 70% -10%, #1a2350 0%, transparent 60%),
+    var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.app {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 32px 20px 64px;
+}
+
+.hero {
+  text-align: center;
+  margin-bottom: 28px;
+}
+
+.hero h1 {
+  font-size: 2.4rem;
+  margin: 0;
+}
+
+.tagline {
+  color: var(--muted);
+  margin: 6px 0 0;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid #232b48;
+  border-radius: var(--radius);
+  padding: 20px 22px;
+  margin-bottom: 18px;
+}
+
+.card h2 {
+  margin: 0 0 14px;
+  font-size: 1.15rem;
+}
+
+.subcard {
+  background: var(--sub);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 14px;
+}
+
+.subcard h3 {
+  margin: 0 0 4px;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0 0 10px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+input,
+select {
+  background: #0d1326;
+  color: var(--text);
+  border: 1px solid #2b3358;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 0.95rem;
+}
+
+input:focus,
+select:focus {
+  outline: 2px solid var(--accent);
+  border-color: transparent;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+button {
+  background: #2a3258;
+  color: var(--text);
+  border: none;
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: filter 0.15s ease, opacity 0.15s ease;
+}
+
+button:hover:not(:disabled) {
+  filter: brightness(1.15);
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+button.primary {
+  background: linear-gradient(135deg, var(--accent), #7aa2ff);
+}
+
+button.danger {
+  background: var(--danger);
+}
+
+.badge {
+  font-size: 0.8rem;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #2a3258;
+}
+
+.badge.online {
+  background: rgba(24, 208, 160, 0.18);
+  color: var(--accent-2);
+}
+
+.badge.offline {
+  background: rgba(255, 91, 110, 0.16);
+  color: var(--danger);
+}
+
+.badge.idle {
+  background: #2a3258;
+  color: var(--muted);
+}
+
+.badge.playing {
+  background: rgba(91, 140, 255, 0.2);
+  color: var(--accent);
+}
+
+.log {
+  background: #080c1a;
+  border: 1px solid #1c2340;
+  border-radius: 12px;
+  padding: 12px;
+  font-size: 0.8rem;
+  color: var(--muted);
+  max-height: 200px;
+  overflow: auto;
+  white-space: pre-wrap;
+  margin-top: 18px;
+}

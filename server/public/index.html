@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cloud Voice — どこの部屋のスピーカーも、あなたの声で。</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="hero">
+        <h1>🔊 Cloud Voice</h1>
+        <p class="tagline">クラウドに送るだけ。あのスピーカーが、しゃべりだす。</p>
+      </header>
+
+      <section class="card" id="connect-card">
+        <h2>1. つなぐ</h2>
+        <div class="grid">
+          <label>
+            ペアリングコード
+            <input id="room" placeholder="例: kitchen-1234" autocomplete="off" />
+          </label>
+          <label>
+            トークン（任意）
+            <input id="token" placeholder="サーバーで設定した場合のみ" autocomplete="off" />
+          </label>
+        </div>
+        <div class="row">
+          <button id="connect-btn" class="primary">接続</button>
+          <span id="conn-status" class="badge offline">未接続</span>
+          <span id="agent-status" class="badge offline">スピーカー: 待機なし</span>
+        </div>
+      </section>
+
+      <section class="card" id="device-card" hidden>
+        <h2>2. スピーカーを選ぶ</h2>
+        <div class="row">
+          <select id="device-select"></select>
+          <button id="refresh-btn">再取得</button>
+        </div>
+      </section>
+
+      <section class="card" id="play-card" hidden>
+        <h2>3. 鳴らす</h2>
+
+        <div class="subcard">
+          <h3>🎵 ファイルを送る</h3>
+          <p class="hint">wav / mp3 などをアップロードして、選択したスピーカーから再生します。</p>
+          <input id="file-input" type="file" accept="audio/*,.wav,.mp3,.ogg,.m4a" />
+          <button id="play-file-btn" class="primary" disabled>再生</button>
+        </div>
+
+        <div class="subcard">
+          <h3>🎙️ マイクで話す</h3>
+          <p class="hint">ブラウザのマイク入力を、ほぼリアルタイムでスピーカーへ流します。</p>
+          <button id="mic-btn">録音開始</button>
+        </div>
+
+        <div class="row">
+          <button id="stop-btn" class="danger">停止</button>
+          <span id="play-status" class="badge idle">idle</span>
+        </div>
+      </section>
+
+      <pre id="log" class="log" aria-live="polite"></pre>
+    </main>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
