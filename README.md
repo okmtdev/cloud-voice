@@ -76,9 +76,17 @@ npm run build      # TypeScript をビルド
 
 ### 2. リレーサーバーを起動（ローカル）
 
+> `start:server` / `dev:server` などのショートカットは **リポジトリのルート**
+> （`cloud-voice/`）で実行してください。`server/` の中には `start` / `dev` しか
+> ありません。`npm run start:*` は事前に `npm run build` が必要です。
+
 ```bash
+# リポジトリのルートで実行
 npm run start:server
 # → http://localhost:8080 で Web UI が開きます
+
+# 開発中はホットリロード版が便利です（ビルド不要）
+npm run dev:server
 ```
 
 任意で共有シークレットを設定できます:
