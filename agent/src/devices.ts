@@ -1,7 +1,4 @@
 import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
-
-const exec = promisify(execFile);
 
 /**
  * Run a command and return its combined stdout + stderr **regardless of exit
@@ -93,19 +90,38 @@ export async function activateDevice(deviceId: string): Promise<boolean> {
   return result !== null;
 }
 
-// ---- Linux (PulseAudio / PipeWire sinks) ------------------------------------
-async function listLinuxDevices(): Promise<Device[]> {
-  let defaultSink = '';
-  try {
-    const { stdout } = await exec('pactl', ['get-default-sink']);
-    defaultSink = stdout.trim();
-  } catch {
-    // older pactl: ignore
-  }
+// ---- Linux (PulseAudio / PipeWire, with ALSA fallback) ----------------------
 
-  const { stdout } = await exec('pactl', ['list', 'short', 'sinks']);
+export type LinuxBackend = 'pulse' | 'alsa';
+let linuxBackend: LinuxBackend | null = null;
+
+/** Which audio backend the player should target. `null` until first detected. */
+export function getLinuxBackend(): LinuxBackend | null {
+  return linuxBackend;
+}
+
+// Prefer PulseAudio/PipeWire when a sound server is actually running; otherwise
+// fall back to ALSA (common on headless Raspberry Pi / server installs).
+async function detectLinuxBackend(): Promise<LinuxBackend> {
+  if (linuxBackend) return linuxBackend;
+  const info = await runCapture('pactl', ['info']);
+  const running = info !== null && /Server (Name|String|Version)|Default Sink/i.test(info);
+  linuxBackend = running ? 'pulse' : 'alsa';
+  return linuxBackend;
+}
+
+async function listLinuxDevices(): Promise<Device[]> {
+  const backend = await detectLinuxBackend();
+  return backend === 'pulse' ? listPulseDevices() : listAlsaDevices();
+}
+
+async function listPulseDevices(): Promise<Device[]> {
+  const defaultSink = (await runCapture('pactl', ['get-default-sink']))?.trim() ?? '';
+  const out = await runCapture('pactl', ['list', 'short', 'sinks']);
+  if (out === null) return [DEFAULT_DEVICE];
+
   const devices: Device[] = [];
-  for (const line of stdout.split('\n')) {
+  for (const line of out.split('\n')) {
     const cols = line.split('\t');
     if (cols.length < 2) continue;
     const name = cols[1].trim();
@@ -116,4 +132,29 @@ async function listLinuxDevices(): Promise<Device[]> {
     devices[0].isDefault = true;
   }
   return devices.length > 0 ? devices : [DEFAULT_DEVICE];
+}
+
+// Parse `aplay -l`. Device ids are ALSA `plughw:CARD,DEV` strings (plughw lets
+// ALSA convert sample formats, which is more forgiving than raw hw:). The
+// synthetic "default" device is kept first since the ALSA default may route
+// elsewhere (e.g. HDMI) and the user often wants to pick a specific card.
+async function listAlsaDevices(): Promise<Device[]> {
+  const out = await runCapture('aplay', ['-l']);
+  if (out === null) {
+    console.warn(
+      '[cloud-voice-agent] ALSA の `aplay` が見つかりません。`sudo apt install alsa-utils` を実行してください。'
+    );
+    return [DEFAULT_DEVICE];
+  }
+
+  const devices: Device[] = [{ ...DEFAULT_DEVICE }];
+  const re = /^card (\d+):\s+[^[]*\[([^\]]+)\],\s*device (\d+):\s+[^[]*\[([^\]]+)\]/;
+  for (const line of out.split('\n')) {
+    const m = line.match(re);
+    if (!m) continue;
+    const [, card, cardName, dev, devName] = m;
+    const label = cardName === devName ? cardName : `${cardName} — ${devName}`;
+    devices.push({ id: `plughw:${card},${dev}`, name: label, isDefault: false });
+  }
+  return devices;
 }

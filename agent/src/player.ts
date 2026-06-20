@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import { DEFAULT_DEVICE } from './devices.js';
+import { DEFAULT_DEVICE, getLinuxBackend } from './devices.js';
 
 export type PlayerEvent = 'playing' | 'idle' | 'error';
 
@@ -116,10 +116,18 @@ export class Player {
       return ['-f', 'audiotoolbox', '-'];
     }
     if (process.platform === 'linux') {
-      const args = ['-f', 'pulse'];
-      if (!isDefault) args.push('-device', this.deviceId);
-      args.push('CloudVoice'); // pulse "output" = stream/app name
-      return args;
+      // ALSA device ids look like "plughw:1,0" / "hw:0,0"; anything else is a
+      // PulseAudio/PipeWire sink name. For the default device, follow whichever
+      // backend was detected at enumeration time.
+      if (/^(plug)?hw:/.test(this.deviceId)) {
+        return ['-f', 'alsa', this.deviceId];
+      }
+      if (isDefault) {
+        return getLinuxBackend() === 'alsa'
+          ? ['-f', 'alsa', 'default']
+          : ['-f', 'pulse', 'CloudVoice'];
+      }
+      return ['-f', 'pulse', '-device', this.deviceId, 'CloudVoice'];
     }
     // Fallback for other platforms: let ffmpeg pick a default output via SDL.
     return ['-f', 'sdl', 'CloudVoice'];
